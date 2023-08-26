@@ -4,6 +4,7 @@ import view
 
 
 def add_digit(digit):
+    """ Adding digit in the end of entered string of entry"""
     value = ent.get()
     if "Введите номер карты" in value:
         value = value.replace("Введите номер карты", '')
@@ -12,15 +13,17 @@ def add_digit(digit):
         value = value.replace("Введите пин-код", '')
         print(value)
     ent.delete(0, tk.END)
-
     ent.insert(0, value + digit)
+
 
 
 def get_entry():
     global res
+    global current_card
+    global btn14, btn15, btn16
     while "+" not in res:
         if res == '':
-            res += ent.get().strip().replace(' ', '')
+            res += ent.get().strip()
             print(res)
             del_entry()
             ent.insert(0, "Введите пин-код")
@@ -33,12 +36,15 @@ def get_entry():
                 del_entry()
 
     else:
-        if SQL_DataBase.find_card_and_pin(int(res.split('+')[0]), int(res.split('+')[1])):
-            print('Наш клиент')
-            ent.insert(0, "Снять - 0, Пополнить - 1, Выход = 2 - 9")
+        current_request = SQL_DataBase.find_card_and_pin(int(res.split("+")[0]), int(res.split("+")[1]))
+        if current_request[0]:
+            print('Наш клиент', )
+            current_card = current_request[1]
+            ent.insert(0, "Выберите операцию: Снять, пополнить, выйти")
+
             # lab_empty(state='active')
         else:
-            print('шулер')
+            print('Неверно введены номер карты и/или пин-код')
 
 
 def clear_entry():
@@ -61,6 +67,17 @@ def press_key(event):
         clear_entry()
 
 
+def take_cash():
+    global current_card
+    pass
+
+
+def push_cash():
+    global current_card
+    pass
+
+
+current_card = None
 win = tk.Tk()
 win.title('Дисплей банкомата')
 photo = tk.PhotoImage(file='pic_atm_cash_icon.png')
@@ -77,7 +94,7 @@ res = ''
 ent = tk.Entry(win, width=20, bg='black', justify=tk.CENTER, font=('Arial', 15))
 ent.grid(row=5, column=0, columnspan=5, sticky='we')
 ent.insert(6, "Введите номер карты")
-# listbox2=Listbox(root,height=5,width=15,selectmode=SINGLE)
+
 t = 'Для снятия нажимите 1,\nдля пополнения нажмите - 2, \nдля выхода любую другую цифру'
 action_label = tk.Label(win, text=t, bg='gray', pady=15, state="disabled")
 action_label.grid(row=8, column=0,
@@ -103,6 +120,16 @@ btn0 = digit_button("0").grid(row=14, column=0, ipadx=10, ipady=15, columnspan=3
 btn13 = tk.Button(win, text="Enter", command=get_entry, fg='#6ea30a', font=('Arial', 25)) \
     .grid(row=13, column=3, ipadx=20, ipady=15, columnspan=2, stick='we')
 # '<Key>' - обработка любого события нажатия на клавишу
+
+btn14 = tk.Button(win, text="Снять", state='active', command=take_cash, font=('Arial', 22)) \
+    .grid(row=8, column=0, ipadx=10, ipady=10, columnspan=3, stick='wens')
+btn15 = tk.Button(win, text="Пополнить", state='active', command=push_cash, font=('Arial', 22)) \
+    .grid(row=8, column=3, ipadx=10, ipady=10, columnspan=2, stick='wens')
+btn16 = tk.Button(win, text="Выйти", state='active', command=lambda x: x, font=('Arial', 22)) \
+    .grid(row=9, column=0, ipadx=10, ipady=10, columnspan=5, stick='we')
+
+
+print(globals())
 win.bind('<Key>', press_key)
 
 win.mainloop()

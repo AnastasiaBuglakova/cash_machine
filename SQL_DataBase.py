@@ -1,9 +1,10 @@
 import pymysql
 from config import host, password, user, db_name
+
 #
 # try:
 #     connection = pymysql.connect(
-#         host = host,  # localhost
+#         host=host,  # localhost
 #         port=3306,
 #         user=user,  # "root"
 #         password=password,  # "1234"
@@ -20,8 +21,8 @@ from config import host, password, user, db_name
 #         # print("Table users dropped successfully")
 #
 #         create1_query = "CREATE TABLE IF NOT EXISTS users" \
-#                        "(id INT PRIMARY KEY AUTO_INCREMENT, firstname VARCHAR(45), lastname VARCHAR(45)" \
-#                        ");"
+#                         "(id INT PRIMARY KEY AUTO_INCREMENT, firstname VARCHAR(45), lastname VARCHAR(45)" \
+#                         ");"
 #         cursor.execute(create1_query)
 #         print("Table USERS created successfully")
 #         # "FOREIGN KEY (card_id) REFERENCES cards(id)
@@ -31,7 +32,7 @@ from config import host, password, user, db_name
 #         # print("Table cards dropped successfully")
 #
 #         create3_query = "CREATE TABLE IF NOT EXISTS cards" \
-#                         "(card_num BIGINT UNSIGNED PRIMARY KEY, user_id INT, sum_on_card FLOAT, FOREIGN KEY (user_id) REFERENCES users(id)" \
+#                         "(card_num BIGINT UNSIGNED PRIMARY KEY, user_id INT PRIMARY KEY AUTO_INCREMENT, sum_on_card FLOAT, FOREIGN KEY (user_id) REFERENCES users(id)" \
 #                         ");"
 #         cursor.execute(create3_query)
 #         print("Table cards created successfully")
@@ -82,7 +83,8 @@ from config import host, password, user, db_name
 
 
 def find_card_and_pin(c, p):
-    res = 0
+    res = []
+    current_client_id = None
     try:
         connection = pymysql.connect(
             host=host,  # localhost
@@ -101,8 +103,8 @@ def find_card_and_pin(c, p):
             for row in rows:
                 print('row = ', row, c, p)
                 if c in row.values() and p in row.values():
-
-                    res +=1
+                    res.append(True)
+                    current_card = row['card_num']
 
         finally:
             connection.close()
@@ -110,4 +112,5 @@ def find_card_and_pin(c, p):
     except Exception as ex:
         print("Disconnected")
         print(ex)
-    return res
+
+    return any(res), current_card
