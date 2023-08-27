@@ -84,7 +84,6 @@ from config import host, password, user, db_name
 
 def find_card_and_pin(c, p):
     res = []
-    current_client_id = None
     try:
         connection = pymysql.connect(
             host=host,  # localhost
@@ -101,7 +100,6 @@ def find_card_and_pin(c, p):
             cursor.execute("SELECT card_num, pin FROM cards;")
             rows = cursor.fetchall()
             for row in rows:
-                print('row = ', row, c, p)
                 if c in row.values() and p in row.values():
                     res.append(True)
                     current_card = row['card_num']
@@ -114,3 +112,37 @@ def find_card_and_pin(c, p):
         print(ex)
 
     return any(res), current_card
+
+
+def request_to_take(current_card_, full_amount_to_take_):
+    row_from_db = None
+    try:
+        connection = pymysql.connect(
+            host=host,  # localhost
+            port=3306,
+            user=user,  # "root"
+            password=password,  # "1234"
+            database=db_name,  # lesson_2
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        print("Connected successfully")
+        try:
+            cursor = connection.cursor()
+            cursor.execute("SELECT card_num, sum_on_card FROM cards;")
+            rows = cursor.fetchall()
+            for row in rows:
+                if current_card_ in row.values():
+                    print('row = ', row, current_card_, full_amount_to_take_)
+                    row_from_db = row
+                    break
+
+        finally:
+            connection.close()
+
+    except Exception as ex:
+        print("Disconnected")
+        print(ex)
+    return row_from_db
+
+
+def take_money_from_card(current_card_, full_amount_of_money_):
