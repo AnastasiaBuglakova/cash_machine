@@ -1,17 +1,16 @@
 import tkinter as tk
 import SQL_DataBase
-import view
-
-MAX_DUTY_TO_TAKE = 600
-MIN_DUTY_TO_TAKE = 30
-DUTY_TO_TAKE_PERCENT = 1.5 / 100
+import constants as c
 
 cash_mashine_state = {'operation': 'ready'}
 """Operation: 'ready', 'seeking card', 'take money', 'deposit money' """
-"""Operation: 'ready', 'seeking card', 'take money', 'deposit money' """
+
 amount_to_take = None
 full_amount_to_take = None
-
+amount_to_push = None
+current_string = ''
+current_card = None
+current_card_sum_op = None
 
 def add_digit(digit):
     """ Adding digit in the end of entered string of entry"""
@@ -28,68 +27,104 @@ def add_digit(digit):
     elif 'Введите сумму снятия:' in value:
         value = value.replace("Введите сумму снятия:", '')
         print(value)
+    elif f"Сумма пополнения и снятия должна быть кратна {c.BASE}" in value:
+        value = value.replace(f"Сумма пополнения и снятия должна быть кратна {c.BASE}", '')
+        print(value)
+    elif "Введите сумму, которую хотите внести на счет:" in value:
+        value = value.replace("Введите сумму, которую хотите внести на счет:", '')
+        print(value)
     ent.delete(0, tk.END)
     ent.insert(0, value + digit)
 
 
-def operation_with_money(db_data):
-    global full_amount_to_take
-    print('full_amount_to_take=-------',full_amount_to_take)
-    if cash_mashine_state['operation'] == 'take money':
-        print('зашла раз')
-        if db_data['sum_on_card'] is None or db_data['sum_on_card'] < full_amount_to_take:
-            print('зашла два')
-            # ent.delete(0, tk.END)
-            ent.insert(0, "Недостаточно средств на счете")
-        elif db_data['sum_on_card'] >= full_amount_to_take:
-            print('зашла три')
+def operation_with_money(full_amount_to_take_):
+    global amount_to_take, amount_to_push
 
-            ent.insert(0, "Приступаем к операции")
-            SQL_DataBase.take_money_from_card(current_card, full_amount_to_take)
+    if current_card_sum_op[1] is None or current_card_sum_op[1] < full_amount_to_take_:
+        ent.delete(0, tk.END)
+        ent.insert(0, "Недостаточно средств на счете")
+    elif current_card_sum_op[1] >= full_amount_to_take_:
+        ent.delete(0, tk.END)
+        ent.insert(0, "Приступаем к операции")
+        res = SQL_DataBase.take_money_from_card(current_card_sum_op[0], full_amount_to_take_, amount_to_take)
+        current_card_sum_op[1] = res
+
+def tax_size():
+    tax = 0
+    if (current_card_sum_op[2] + 1) % 3 == 0:
+        tax += c.PERCENT_FOR_3RD_OPERATION * current_card_sum_op[1]
+        print(f'THIRD OPERATION is True, {tax =}')
+    if current_card_sum_op[1] >= c.WEALTH_LIMIT:
+        tax += c.WEALTH_PERCENT * current_card_sum_op[1]
+        print(f'WEALTH_LIMIT is True, tax ={c.WEALTH_PERCENT * current_card_sum_op[1]}')
+    return tax
 
 
 def get_entry():
-    global res, amount_to_take, full_amount_to_take
-    global current_card
-    global btn14, btn15, btn16
-    while "+" not in res and not current_card:
-        if res == '':
-            res += ent.get().strip()
-            print(res)
+    global current_string, amount_to_take, full_amount_to_take, amount_to_push, \
+        current_card, current_card_sum_op
+
+    while "+" not in current_string and cash_mashine_state['operation'] == 'ready':
+        if not current_string:
+            current_string += ent.get().strip()
             del_entry()
             ent.insert(0, "Введите пин-код")
             break
         else:
             pin_num = ent.get()
-            if "Введите пин-код" not in pin_num and len(pin_num) == 4:
-                res += '+' + pin_num
+            if "Введите пин-код" not in pin_num:
+                current_string += '+' + pin_num
+                print(current_string)
                 cash_mashine_state['operation'] = 'seeking card'
                 del_entry()
-
+    print(cash_mashine_state['operation'])
     if cash_mashine_state['operation'] == 'seeking card':
-        current_request = SQL_DataBase.find_card_and_pin(int(res.split("+")[0]), int(res.split("+")[1]))
-        if current_request[0]:
-            print('Наш клиент', )
-            current_card = current_request[1]
-            print("Выберите операцию: Снять, пополнить, выйти")
+        card, pin = tuple(map(int, current_string.split("+")))
+        current_card_sum_op = SQL_DataBase.find_card_and_pin(card, pin)
+        if not current_card_sum_op is None:
+            print('Наш клиент')
             ent.insert(0, "Выберите операцию: Снять, пополнить, выйти")
         else:
-            print('Неверно введены номер карты и/или пин-код')
+            print('Шулер')
             ent.insert(0, 'Неверно введены номер карты и/или пин-код')
+            cash_mashine_state['operation'] == 'ready'
+            current_string = ""
 
-    if cash_mashine_state['operation'] == 'take money':
+    elif cash_mashine_state['operation'] == 'take money':
         amount_to_take = int(ent.get())
-        if MIN_DUTY_TO_TAKE < amount_to_take * DUTY_TO_TAKE_PERCENT < MAX_DUTY_TO_TAKE:
-            full_amount_to_take =round(amount_to_take * (1 + DUTY_TO_TAKE_PERCENT), 2)
-        elif amount_to_take * DUTY_TO_TAKE_PERCENT < MIN_DUTY_TO_TAKE:
-            full_amount_to_take = round(amount_to_take + MIN_DUTY_TO_TAKE, 2)
+        print(amount_to_take)
+        while amount_to_take % c.BASE != 0:
+            del_entry()
+            ent.insert(0, f"Сумма пополнения и снятия должна быть кратна {c.BASE}")
+            amount_to_take = int(ent.get())
+        if c.MIN_DUTY_TO_TAKE < amount_to_take * c.DUTY_TO_TAKE_PERCENT < c.MAX_DUTY_TO_TAKE:
+            full_amount_to_take = round(amount_to_take * (1 + c.DUTY_TO_TAKE_PERCENT), 2)
+        elif amount_to_take * c.DUTY_TO_TAKE_PERCENT < c.MIN_DUTY_TO_TAKE:
+            full_amount_to_take = round(amount_to_take + c.MIN_DUTY_TO_TAKE, 2)
         else:
-            full_amount_to_take = round(amount_to_take + MAX_DUTY_TO_TAKE, 2)
+            full_amount_to_take = round(amount_to_take + c.MAX_DUTY_TO_TAKE, 2)
+        full_amount_to_take += tax_size()
         print(f'{full_amount_to_take = }')
-        db_data = SQL_DataBase.request_to_take(current_card, full_amount_to_take)
-        print(db_data)
-        operation_with_money(db_data)
+
+        operation_with_money(full_amount_to_take)
         del_entry()
+        ent.insert(0, f"Сумма снята, на карте осталось {current_card_sum_op[1]}")
+
+    elif cash_mashine_state['operation'] == 'push money':
+        amount_to_push = int(ent.get())
+        print(amount_to_push)
+        while amount_to_push % c.BASE != 0:
+            del_entry()
+            ent.insert(0, f"Сумма пополнения и снятия должна быть кратна {c.BASE}")
+            amount_to_push = int(ent.get())
+        ent.delete(0, tk.END)
+        ent.insert(0, "Приступаем к операции")
+        answer_from_db = SQL_DataBase.push_money_to_card(current_card_sum_op[0], amount_to_push)
+        print(answer_from_db)
+        full_amount_to_take = tax_size()
+        operation_with_money(full_amount_to_take)
+        ent.delete(0, tk.END)
+        ent.insert(0, f"Cумма зачислена. На счете {answer_from_db[0]['sum_on_card']}")
 
 
 def clear_entry():
@@ -120,11 +155,24 @@ def take_cash():
 
 
 def push_cash():
-    global current_card
-    pass
+    global current_card, amount_to_take
+    cash_mashine_state['operation'] = 'push money'
+    del_entry()
+    ent.insert(0, "Введите сумму, которую хотите внести на счет:")
 
 
-current_card = None
+def exit():
+    global current_card, current_string
+    current_card = None
+    cash_mashine_state['operation'] = 'ready'
+    current_string = ''
+    del_entry()
+    ent.insert(6, "Введите номер карты")
+    print(f'{global_dict=}')
+
+
+global_dict = globals().copy()
+
 win = tk.Tk()
 win.title('Дисплей банкомата')
 photo = tk.PhotoImage(file='pic_atm_cash_icon.png')
@@ -137,7 +185,7 @@ label1 = tk.Label(win, text="Добрый день!",
                   font=('Arial', 20, 'bold'),
                   pady=20,
                   ).grid(row=0, column=0, columnspan=5)
-res = ''
+
 ent = tk.Entry(win, width=20, bg='black', justify=tk.CENTER, font=('Arial', 15))
 ent.grid(row=5, column=0, columnspan=5, sticky='we')
 ent.insert(6, "Введите номер карты")
@@ -152,7 +200,7 @@ btn1 = digit_button('1').grid(row=11, column=0, ipadx=10, ipady=15, sticky='w')
 btn2 = digit_button("2").grid(row=11, column=1, ipadx=10, ipady=15, sticky='w')
 btn3 = digit_button("3").grid(row=11, column=2, ipadx=10, ipady=15, sticky='w')
 btn11 = tk.Button(win, text="Cancel", command=del_entry, fg='#f59b7f', font=('Arial', 25)) \
-    .grid(row=11, column=3, ipadx=20, ipady=15, columnspan=2, stick='w')
+    .grid(row=11, column=3, ipadx=20, ipady=15, columnspan=2, stick='we')
 
 btn4 = digit_button("4").grid(row=12, column=0, ipadx=10, ipady=15)
 btn5 = digit_button("5").grid(row=12, column=1, ipadx=10, ipady=15)
@@ -172,10 +220,9 @@ btn14 = tk.Button(win, text="Снять", state='active', command=take_cash, fon
     .grid(row=8, column=0, ipadx=10, ipady=10, columnspan=3, stick='wens')
 btn15 = tk.Button(win, text="Пополнить", state='active', command=push_cash, font=('Arial', 22)) \
     .grid(row=8, column=3, ipadx=10, ipady=10, columnspan=2, stick='wens')
-btn16 = tk.Button(win, text="Выйти", state='active', command=lambda x: x, font=('Arial', 22)) \
+btn16 = tk.Button(win, text="Выйти", state='active', command=exit, font=('Arial', 22)) \
     .grid(row=9, column=0, ipadx=10, ipady=10, columnspan=5, stick='we')
 
-print(globals())
 win.bind('<Key>', press_key)
 
 win.mainloop()
