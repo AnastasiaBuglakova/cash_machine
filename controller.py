@@ -3,7 +3,7 @@ import SQL_DataBase
 import constants as c
 
 cash_mashine_state = {'operation': 'ready'}
-"""Operation: 'ready', 'seeking card', 'take money', 'deposit money' """
+"""Operation: 'ready', 'seeking card', 'take money', 'push money' """
 
 amount_to_take = None
 full_amount_to_take = None
