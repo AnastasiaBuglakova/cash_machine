@@ -108,15 +108,16 @@ def find_card_and_pin(c, p):
                 if c in row.values() and p in row.values():
                     current_card.append(c)
                     current_card.append(row['sum_on_card'])
+
                     cursor.execute("SELECT * FROM operations;")
                     rows = cursor.fetchall()
-                    for row in rows:
-                        if c in row.values():
+                    for r in rows:
+                        if c in r.values():
                             num_operations += 1
                     current_card.append(num_operations)
                     break
             else:
-                current_card= None
+                current_card = None
 
         finally:
             connection.close()
@@ -124,42 +125,46 @@ def find_card_and_pin(c, p):
     except Exception as ex:
         print("Disconnected")
         print(ex)
-
+    if current_card and current_card[1] is None:
+        current_card[1] = 0
     return current_card
 
 
-def request_to_take(current_card_, full_amount_to_take_):
-    row_from_db = None
-    try:
-        connection = pymysql.connect(
-            host=host,  # localhost
-            port=3306,
-            user=user,  # "root"
-            password=password,  # "1234"
-            database=db_name,  # lesson_2
-            cursorclass=pymysql.cursors.DictCursor
-        )
-        print("Connected successfully")
-        try:
-            cursor = connection.cursor()
-            cursor.execute("SELECT card_num, sum_on_card FROM cards;")
-            rows = cursor.fetchall()
-            for row in rows:
-                if current_card_ in row.values():
-                    print('row = ', row, current_card_, full_amount_to_take_)
-                    row_from_db = row
-                    break
+                # def request_to_take(current_card_, full_amount_to_take_):
+                #     row_from_db = None
+                #     try:
+                #         connection = pymysql.connect(
+                #             host=host,  # localhost
+                #             port=3306,
+                #             user=user,  # "root"
+                #             password=password,  # "1234"
+                #             database=db_name,  # lesson_2
+                #             cursorclass=pymysql.cursors.DictCursor
+                #         )
+                #         print("Connected successfully")
+                #         try:
+                #             cursor = connection.cursor()
+                #             cursor.execute("SELECT card_num, sum_on_card FROM cards;")
+                #             rows = cursor.fetchall()
+                #             for row in rows:
+                #                 if current_card_ in row.values():
+                #                     print('row = ', row, current_card_, full_amount_to_take_)
+                #                     row_from_db = row
+                #                     break
+                #
+                #         finally:
+                #             connection.close()
+                #
+                #     except Exception as ex:
+                #         print("Disconnected")
+                #         print(ex)
+                #     return row_from_db
 
-        finally:
-            connection.close()
 
-    except Exception as ex:
-        print("Disconnected")
-        print(ex)
-    return row_from_db
-
-
-def take_money_from_card(current_card_, full_amount_of_money_, amount_to_take_):
+def take_money_from_card(current_card_, full_amount_of_money_, tax_to_take_):
+    """Function takes number of card and amount of money and requests to MySQL
+    to update data in cards and operations tables.
+    Returns sum on card"""
     row_from_db = 'здесь д.б. быть строка данных по карте из таблицы карт БД'
     try:
         connection = pymysql.connect(
@@ -180,7 +185,7 @@ def take_money_from_card(current_card_, full_amount_of_money_, amount_to_take_):
 
             cursor.execute(
                 f'INSERT operations (card_num, type_op, summ, duty, date) VALUES ({current_card_}, "take_money", '
-                f'{full_amount_of_money_}, {full_amount_of_money_ - amount_to_take_}, DATE(NOW()));')
+                f'{full_amount_of_money_}, {tax_to_take_}, DATE(NOW()));')
             connection.commit()
 
             cursor.execute(f"SELECT card_num, sum_on_card FROM cards WHERE card_num = {current_card_};")
@@ -194,7 +199,7 @@ def take_money_from_card(current_card_, full_amount_of_money_, amount_to_take_):
     return row_from_db[0]['sum_on_card']
 
 
-def push_money_to_card(current_card_, amount_to_push_):
+def push_money_to_card(current_card_, amount_to_push_, tax_):
     print(f"{current_card_=}, {amount_to_push_=}")
     row_from_db = None
     try:
@@ -214,13 +219,13 @@ def push_money_to_card(current_card_, amount_to_push_):
             print("sum_on_card_from_db", sum_on_card_from_db)
             if sum_on_card_from_db is not None:
                 cursor.execute(
-                    f'UPDATE cards SET sum_on_card = sum_on_card + {amount_to_push_} WHERE card_num = {current_card_};')
+                    f'UPDATE cards SET sum_on_card = sum_on_card + {amount_to_push_}-{tax_} WHERE card_num = {current_card_};')
             else:
                 cursor.execute(
-                    f'UPDATE cards SET sum_on_card = {amount_to_push_} WHERE card_num = {current_card_};')
+                    f'UPDATE cards SET sum_on_card = {amount_to_push_}-{tax_} WHERE card_num = {current_card_};')
             connection.commit()
             cursor.execute(
-                f'INSERT operations(card_num, type_op, summ, duty, date) VALUES ({current_card_}, "push_money", {amount_to_push_}, 0, DATE(NOW()));')
+                f'INSERT operations(card_num, type_op, summ, duty, date) VALUES ({current_card_}, "push_money", {amount_to_push_}, {tax_}, DATE(NOW()));')
             connection.commit()
             cursor.execute(f"SELECT card_num, sum_on_card FROM cards WHERE card_num = {current_card_};")
             row_from_db = cursor.fetchall()
@@ -231,7 +236,7 @@ def push_money_to_card(current_card_, amount_to_push_):
     except Exception as ex:
         print("Disconnected")
         print(ex)
-    return row_from_db
+    return row_from_db[0]['sum_on_card']
 
 
 # def wealth_and_3rd_transaction_tax(current_card_):

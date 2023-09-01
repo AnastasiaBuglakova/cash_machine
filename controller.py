@@ -33,24 +33,40 @@ def add_digit(digit):
     elif "Введите сумму, которую хотите внести на счет:" in value:
         value = value.replace("Введите сумму, которую хотите внести на счет:", '')
         print(value)
+    elif "Сумма пополнения и снятия должна быть кратна " in value:
+        value = value.replace("Сумма пополнения и снятия должна быть кратна ")
     ent.delete(0, tk.END)
     ent.insert(0, value + digit)
 
 
 def operation_with_money(full_amount_to_take_):
+    """Функция проверяет достаточность средств на счете и отправляет запрос в БД на снятие и пополнение счета """
+    """с учетом комиссии банка"""
     global amount_to_take, amount_to_push
 
-    if current_card_sum_op[1] is None or current_card_sum_op[1] < full_amount_to_take_:
+    if current_card_sum_op[1] >= full_amount_to_take_ and cash_mashine_state['operation'] == 'take money':
         ent.delete(0, tk.END)
-        ent.insert(0, "Недостаточно средств на счете")
-    elif current_card_sum_op[1] >= full_amount_to_take_:
-        ent.delete(0, tk.END)
-        ent.insert(0, "Приступаем к операции")
-        res = SQL_DataBase.take_money_from_card(current_card_sum_op[0], full_amount_to_take_, amount_to_take)
-        current_card_sum_op[1] = res
+        ent.insert(0, f"Приступаем к операции. Полная сумма к снятию {full_amount_to_take-calculate_tax_size()}")
 
-def tax_size():
+        print(f'{full_amount_to_take_=}, {amount_to_take=}')
+        current_card_sum_op[1] = SQL_DataBase.take_money_from_card(current_card_sum_op[0], full_amount_to_take_, calculate_tax_size())
+        return True
+
+    elif current_card_sum_op[1] >= full_amount_to_take_ and cash_mashine_state['operation'] == 'push money':
+        ent.delete(0, tk.END)
+        ent.insert(0, f"Приступаем к операции. Сумма к зачислению {full_amount_to_take}")
+
+        print(f'{full_amount_to_take_=}, {amount_to_take=}')
+        current_card_sum_op[1] = SQL_DataBase.push_money_to_card(current_card_sum_op[0], amount_to_push, calculate_tax_size())
+        return True
+    else:
+        return False
+
+def calculate_tax_size():
+    """Функция вычисляет размер комиссии по данным о карте из списка current_card_sum_op, """
+    """включая налог на богатсво и плату за 3ю операцию"""
     tax = 0
+    print(f'{current_card_sum_op = }')
     if (current_card_sum_op[2] + 1) % 3 == 0:
         tax += c.PERCENT_FOR_3RD_OPERATION * current_card_sum_op[1]
         print(f'THIRD OPERATION is True, {tax =}')
@@ -61,9 +77,11 @@ def tax_size():
 
 
 def get_entry():
+    """Функция обрабатывает нажание на кнопку Enter при вводе номера карты, пин кода карты и вводе суммы к снятию или зачисления"""
     global current_string, amount_to_take, full_amount_to_take, amount_to_push, \
         current_card, current_card_sum_op
-
+    if current_string.isalpha():
+        del_entry()
     while "+" not in current_string and cash_mashine_state['operation'] == 'ready':
         if not current_string:
             current_string += ent.get().strip()
@@ -96,19 +114,22 @@ def get_entry():
         while amount_to_take % c.BASE != 0:
             del_entry()
             ent.insert(0, f"Сумма пополнения и снятия должна быть кратна {c.BASE}")
-            amount_to_take = int(ent.get())
+            amount_to_take = int(ent.get().replace("Сумма пополнения и снятия должна быть кратна ", ''))
         if c.MIN_DUTY_TO_TAKE < amount_to_take * c.DUTY_TO_TAKE_PERCENT < c.MAX_DUTY_TO_TAKE:
             full_amount_to_take = round(amount_to_take * (1 + c.DUTY_TO_TAKE_PERCENT), 2)
         elif amount_to_take * c.DUTY_TO_TAKE_PERCENT < c.MIN_DUTY_TO_TAKE:
             full_amount_to_take = round(amount_to_take + c.MIN_DUTY_TO_TAKE, 2)
         else:
             full_amount_to_take = round(amount_to_take + c.MAX_DUTY_TO_TAKE, 2)
-        full_amount_to_take += tax_size()
+        full_amount_to_take += calculate_tax_size()
         print(f'{full_amount_to_take = }')
-
-        operation_with_money(full_amount_to_take)
-        del_entry()
-        ent.insert(0, f"Сумма снята, на карте осталось {current_card_sum_op[1]}")
+        request_take = operation_with_money(full_amount_to_take)
+        if request_take:
+            del_entry()
+            ent.insert(0, f"Сумма снята, на карте осталось {current_card_sum_op[1]}")
+        else:
+            del_entry()
+            ent.insert(0, f"Недостаточно средств на счете {current_card_sum_op[1]}")
 
     elif cash_mashine_state['operation'] == 'push money':
         amount_to_push = int(ent.get())
@@ -116,16 +137,17 @@ def get_entry():
         while amount_to_push % c.BASE != 0:
             del_entry()
             ent.insert(0, f"Сумма пополнения и снятия должна быть кратна {c.BASE}")
-            amount_to_push = int(ent.get())
+            amount_to_push = int(ent.get().replace("Сумма пополнения и снятия должна быть кратна ", ''))
         ent.delete(0, tk.END)
         ent.insert(0, "Приступаем к операции")
-        answer_from_db = SQL_DataBase.push_money_to_card(current_card_sum_op[0], amount_to_push)
-        print(answer_from_db)
-        full_amount_to_take = tax_size()
-        operation_with_money(full_amount_to_take)
-        ent.delete(0, tk.END)
-        ent.insert(0, f"Cумма зачислена. На счете {answer_from_db[0]['sum_on_card']}")
-
+        full_amount_to_take = calculate_tax_size()
+        request_push = operation_with_money(full_amount_to_take)
+        if request_push:
+            ent.delete(0, tk.END)
+            ent.insert(0, f"Cумма зачислена. На счете {current_card_sum_op[1]}")
+        else:
+            del_entry()
+            ent.insert(0, f"Недостаточно средств на счете {current_card_sum_op[1]}")
 
 def clear_entry():
     ent.delete(len(ent.get()) - 1)
