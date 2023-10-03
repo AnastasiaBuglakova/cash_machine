@@ -44,7 +44,6 @@ def find_card_and_pin(c, p):
 
     except Exception as ex:
         logger.warning(msg='Нет соединения с БД для идентификации данных карты' + ex.__str__())
-        print(ex)
     if current_card == []:
         return None
     return current_card
@@ -79,18 +78,16 @@ def take_money_from_card(current_card_, full_amount_of_money_, tax_to_take_):
 
             cursor.execute(f"SELECT card_num, sum_on_card FROM cards WHERE card_num = {current_card_};")
             row_from_db = cursor.fetchall()
-            print(row_from_db[0]['sum_on_card'])
+
         finally:
             connection.close()
     except Exception as ex:
-        print("Disconnected")
         logger.warning(msg='Нет соединения с БД для снятия суммы со счета' + ex.__str__())
-        print(ex)
+
     return row_from_db[0]['sum_on_card']
 
 
 def push_money_to_card(current_card_, amount_to_push_, tax_):
-    print(f"{current_card_=}, {amount_to_push_=}")
     row_from_db = None
     try:
         connection = pymysql.connect(
@@ -106,7 +103,6 @@ def push_money_to_card(current_card_, amount_to_push_, tax_):
             cursor = connection.cursor()
             cursor.execute(f"SELECT sum_on_card FROM cards WHERE card_num = {current_card_};")
             sum_on_card_from_db = cursor.fetchall()[0]['sum_on_card']
-            print("sum_on_card_from_db", sum_on_card_from_db)
             logger.info(msg=f'На карте клиента {sum_on_card_from_db}')
             if sum_on_card_from_db is not None:
                 cursor.execute(
@@ -121,7 +117,6 @@ def push_money_to_card(current_card_, amount_to_push_, tax_):
             cursor.execute(f"SELECT card_num, sum_on_card FROM cards WHERE card_num = {current_card_};")
             row_from_db = cursor.fetchall()
             connection.commit()
-            print(row_from_db)
             logger.info(msg=f'Данные по карте {row_from_db}')
         finally:
             connection.close()
@@ -140,49 +135,42 @@ def push_money_to_card(current_card_, amount_to_push_, tax_):
 #         database=db_name,  # lesson_2
 #         cursorclass=pymysql.cursors.DictCursor
 #     )
-#     print("Connected successfully")
 #     try:
 #         cursor = connection.cursor()
 #
 #         # create table
 #         # drop_query = "DROP TABLE IF EXISTS users;"
 #         # cursor.execute(drop_query)
-#         # print("Table users dropped successfully")
-#
+
 #         create1_query = "CREATE TABLE IF NOT EXISTS users" \
 #                         "(id INT PRIMARY KEY AUTO_INCREMENT, firstname VARCHAR(45), lastname VARCHAR(45)" \
 #                         ");"
 #         cursor.execute(create1_query)
-#         print("Table USERS created successfully")
+
 #         # "FOREIGN KEY (card_id) REFERENCES cards(id)
 #
 #         # drop_query2 = "DROP TABLE IF EXISTS cards;"
 #         # cursor.execute(drop_query2)
-#         # print("Table cards dropped successfully")
 #
 #         create3_query = "CREATE TABLE IF NOT EXISTS cards" \
 #                         "(card_num BIGINT UNSIGNED PRIMARY KEY, user_id INT PRIMARY KEY AUTO_INCREMENT, sum_on_card FLOAT, FOREIGN KEY (user_id) REFERENCES users(id)" \
 #                         ");"
 #         cursor.execute(create3_query)
-#         print("Table cards created successfully")
 #
 #         drop_query3 = "DROP TABLE IF EXISTS operations;"
 #         cursor.execute(drop_query3)
-#         print("Table operations dropped successfully")
 #
 #         create2_query = "CREATE TABLE IF NOT EXISTS operations" \
 #                         "(id INT PRIMARY KEY AUTO_INCREMENT, card_num BIGINT UNSIGNED, date DATE, type_op VARCHAR(10), summ FLOAT, duty FLOAT," \
 #                         "FOREIGN KEY (card_num) REFERENCES cards(card_num)" \
 #                         ");"
 #         cursor.execute(create2_query)
-#         print("Table operations created successfully")
 #
 #         # insert data
 #         insert_query = "INSERT users(firstname) VALUES ('Алина'), " \
 #                        "('Test');"
 #         cursor.execute(insert_query)
 #         connection.commit()
-#         print("Insert successfully")
 #
 #         # update
 #         cursor.execute("UPDATE users SET firstname = 'Mikle'"
@@ -191,7 +179,6 @@ def push_money_to_card(current_card_, amount_to_push_, tax_):
 #         add_column_query = "ALTER TABLE cards ADD COLUMN pin INT NOT NULL"
 #         cursor.execute(add_column_query)
 #         connection.commit()
-#         print("Insert pin successfully")
 #
 #         # delete
 #         cursor.execute("DELETE FROM users WHERE id = 2")
@@ -200,12 +187,9 @@ def push_money_to_card(current_card_, amount_to_push_, tax_):
 #         #  select-ы
 #         cursor.execute("SELECT * FROM cards;")
 #         rows = cursor.fetchall()
-#         for row in rows:
-#             print(row)
 #
 #     finally:
 #         connection.close()
 #
 # except Exception as ex:
-#     print("Disconnected")
 #     print(ex)
