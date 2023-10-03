@@ -1,6 +1,11 @@
 import pymysql
 from config import host, password, user, db_name
+import logging
 
+FORMAT = '{levelname:8} | {asctime:15} | {name:10}| {funcName:20} | {msg}'
+logging.basicConfig(format=FORMAT, filename='logfile.log', filemode='a', encoding='utf-8', level=logging.DEBUG,
+                    style="{")
+logger = logging.getLogger(__name__)
 
 def find_card_and_pin(c, p):
     current_card = []
@@ -14,10 +19,9 @@ def find_card_and_pin(c, p):
             database=db_name,  # lesson_2
             cursorclass=pymysql.cursors.DictCursor
         )
-        print("Connected successfully")
+        logger.info(msg='Успешное соединение с БД для идентификации данных карты')
         try:
             cursor = connection.cursor()
-            #  select-ы
             cursor.execute("SELECT card_num, pin, sum_on_card FROM cards;")
             rows = cursor.fetchall()
             for row in rows:
@@ -39,10 +43,10 @@ def find_card_and_pin(c, p):
             connection.close()
 
     except Exception as ex:
-        print("Disconnected")
+        logger.warning(msg='Нет соединения с БД для идентификации данных карты' + ex.__str__())
         print(ex)
-    if current_card and current_card[1] is None:
-        current_card[1] = 0
+    if current_card == []:
+        return None
     return current_card
 
 
@@ -60,7 +64,7 @@ def take_money_from_card(current_card_, full_amount_of_money_, tax_to_take_):
             database=db_name,  # lesson_2
             cursorclass=pymysql.cursors.DictCursor
         )
-        print("Connected successfully")
+        logger.info(msg='Успешное соединение с БД для снятия суммы')
         try:
             cursor = connection.cursor()
             cursor.execute(
@@ -80,6 +84,7 @@ def take_money_from_card(current_card_, full_amount_of_money_, tax_to_take_):
             connection.close()
     except Exception as ex:
         print("Disconnected")
+        logger.warning(msg='Нет соединения с БД для снятия суммы со счета' + ex.__str__())
         print(ex)
     return row_from_db[0]['sum_on_card']
 
@@ -96,12 +101,13 @@ def push_money_to_card(current_card_, amount_to_push_, tax_):
             database=db_name,  # lesson_2
             cursorclass=pymysql.cursors.DictCursor
         )
-        print("Connected successfully")
+        logger.info(msg='Успешное соединение с БД для зачисления суммы')
         try:
             cursor = connection.cursor()
             cursor.execute(f"SELECT sum_on_card FROM cards WHERE card_num = {current_card_};")
             sum_on_card_from_db = cursor.fetchall()[0]['sum_on_card']
             print("sum_on_card_from_db", sum_on_card_from_db)
+            logger.info(msg=f'На карте клиента {sum_on_card_from_db}')
             if sum_on_card_from_db is not None:
                 cursor.execute(
                     f'UPDATE cards SET sum_on_card = sum_on_card + {amount_to_push_}-{tax_} WHERE card_num = {current_card_};')
@@ -116,10 +122,11 @@ def push_money_to_card(current_card_, amount_to_push_, tax_):
             row_from_db = cursor.fetchall()
             connection.commit()
             print(row_from_db)
+            logger.info(msg=f'Данные по карте {row_from_db}')
         finally:
             connection.close()
     except Exception as ex:
-        print("Disconnected")
+        logger.warning(msg='Нет соединения с БД для зачисления суммы на счет' + ex.__str__())
         print(ex)
     return row_from_db[0]['sum_on_card']
 
