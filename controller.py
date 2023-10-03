@@ -1,6 +1,7 @@
 import tkinter as tk
 import SQL_DataBase
 import constants as c
+import logging
 
 cash_mashine_state = {'operation': 'ready'}
 """Operation: 'ready', 'seeking card', 'take money', 'push money' """
@@ -12,27 +13,33 @@ current_string = ''
 current_card = None
 current_card_sum_op = None
 
+FORMAT = '{levelname:8} | {asctime:15} | {name:10}| {funcName:20} | {msg}'
+logging.basicConfig(format=FORMAT, filename='logfile.log', filemode='a', encoding='utf-8', level=logging.DEBUG,
+                    style="{")
+logger = logging.getLogger(__name__)
+
+logger.warning(msg='Запуск работы банкомата')
 def add_digit(digit):
     """ Adding digit in the end of entered string of entry"""
     value = ent.get()
     if "Введите номер карты" in value:
         value = value.replace("Введите номер карты", '')
-        print(value)
+
     elif 'Введите пин-код' in value:
         value = value.replace("Введите пин-код", '')
-        print(value)
+
     elif 'Выберите операцию: Снять, пополнить, выйти' in value:
         value = value.replace("Выберите операцию: Снять, пополнить, выйти", '')
-        print(value)
+
     elif 'Введите сумму снятия:' in value:
         value = value.replace("Введите сумму снятия:", '')
-        print(value)
+
     elif f"Сумма пополнения и снятия должна быть кратна {c.BASE}" in value:
         value = value.replace(f"Сумма пополнения и снятия должна быть кратна {c.BASE}", '')
-        print(value)
+
     elif "Введите сумму, которую хотите внести на счет:" in value:
         value = value.replace("Введите сумму, которую хотите внести на счет:", '')
-        print(value)
+
     elif "Сумма пополнения и снятия должна быть кратна " in value:
         value = value.replace("Сумма пополнения и снятия должна быть кратна ")
     ent.delete(0, tk.END)
@@ -49,6 +56,7 @@ def operation_with_money(full_amount_to_take_):
         ent.insert(0, f"Приступаем к операции. Полная сумма к снятию {full_amount_to_take-calculate_tax_size()}")
 
         print(f'{full_amount_to_take_=}, {amount_to_take=}')
+        logger.info(msg=f'Карта номер: {current_card}. Сумма снятия со счета с учетом платы за обслуживание: {full_amount_to_take}, сумма к выдаче: {amount_to_take}')
         current_card_sum_op[1] = SQL_DataBase.take_money_from_card(current_card_sum_op[0], full_amount_to_take_, calculate_tax_size())
         return True
 
@@ -85,6 +93,7 @@ def get_entry():
     while "+" not in current_string and cash_mashine_state['operation'] == 'ready':
         if not current_string:
             current_string += ent.get().strip()
+            current_card = current_string
             del_entry()
             ent.insert(0, "Введите пин-код")
             break
@@ -92,8 +101,10 @@ def get_entry():
             pin_num = ent.get()
             if "Введите пин-код" not in pin_num:
                 current_string += '+' + pin_num
+
                 print(current_string)
                 cash_mashine_state['operation'] = 'seeking card'
+                logger.debug(msg="Текущий режим: seeking card")
                 del_entry()
     print(cash_mashine_state['operation'])
     if cash_mashine_state['operation'] == 'seeking card':
@@ -101,20 +112,25 @@ def get_entry():
         current_card_sum_op = SQL_DataBase.find_card_and_pin(card, pin)
         if not current_card_sum_op is None:
             print('Наш клиент')
+            logger.info(msg=f"Успешный вход с номером карты: {current_card}")
             ent.insert(0, "Выберите операцию: Снять, пополнить, выйти")
         else:
             print('Шулер')
+            logger.warning(msg=f"Неудачная попытка входа с данными номера карты + пин-кодом: {current_string}")
             ent.insert(0, 'Неверно введены номер карты и/или пин-код')
             cash_mashine_state['operation'] == 'ready'
+            logger.debug(msg="Текущий режим: ready")
             current_string = ""
 
     elif cash_mashine_state['operation'] == 'take money':
         amount_to_take = int(ent.get())
         print(amount_to_take)
-        while amount_to_take % c.BASE != 0:
+        while amount_to_take % c.BASE != 0 or amount_to_push == 0:
+            logger.info(msg=f'Запрошено снятие со счета суммы {amount_to_take}')
             del_entry()
             ent.insert(0, f"Сумма пополнения и снятия должна быть кратна {c.BASE}")
-            amount_to_take = int(ent.get().replace("Сумма пополнения и снятия должна быть кратна ", ''))
+            amount_to_take = int(ent.get().replace(f"Сумма пополнения и снятия должна быть кратна {c.BASE}", 0))
+        logger.info(msg=f'Принят запрос снятиия суммы {amount_to_take}')
         if c.MIN_DUTY_TO_TAKE < amount_to_take * c.DUTY_TO_TAKE_PERCENT < c.MAX_DUTY_TO_TAKE:
             full_amount_to_take = round(amount_to_take * (1 + c.DUTY_TO_TAKE_PERCENT), 2)
         elif amount_to_take * c.DUTY_TO_TAKE_PERCENT < c.MIN_DUTY_TO_TAKE:
@@ -134,10 +150,12 @@ def get_entry():
     elif cash_mashine_state['operation'] == 'push money':
         amount_to_push = int(ent.get())
         print(amount_to_push)
-        while amount_to_push % c.BASE != 0:
+        while amount_to_push % c.BASE != 0 or amount_to_push ==0:
+            logger.info(msg=f'Запрошено пополнение счета на сумму {amount_to_push}')
             del_entry()
             ent.insert(0, f"Сумма пополнения и снятия должна быть кратна {c.BASE}")
-            amount_to_push = int(ent.get().replace("Сумма пополнения и снятия должна быть кратна ", ''))
+            amount_to_push = int(ent.get().replace(f"Сумма пополнения и снятия должна быть кратна {c.BASE}", 0))
+        logger.info(msg=f'Принят запрос зачисления суммы {amount_to_push}')
         ent.delete(0, tk.END)
         ent.insert(0, "Приступаем к операции")
         full_amount_to_take = calculate_tax_size()
@@ -171,29 +189,33 @@ def press_key(event):
 
 def take_cash():
     global current_card, amount_to_take
+    logger.info(msg=f'Выбор операции снятия со счета')
     cash_mashine_state['operation'] = 'take money'
+    logger.debug(msg="Текущий режим: take money")
     del_entry()
     ent.insert(0, "Введите сумму снятия:")
 
 
 def push_cash():
     global current_card, amount_to_take
+    logger.info(msg=f'Выбор операции пополнения счета')
     cash_mashine_state['operation'] = 'push money'
+    logger.debug(msg="Текущий режим: push money")
     del_entry()
     ent.insert(0, "Введите сумму, которую хотите внести на счет:")
 
 
 def exit():
     global current_card, current_string
+    logger.info(msg=f'Клиент с номером карты {current_card} вышел из системы.')
     current_card = None
     cash_mashine_state['operation'] = 'ready'
     current_string = ''
+    current_card = None
+    
     del_entry()
     ent.insert(6, "Введите номер карты")
-    print(f'{global_dict=}')
 
-
-global_dict = globals().copy()
 
 win = tk.Tk()
 win.title('Дисплей банкомата')
@@ -236,7 +258,6 @@ btn9 = digit_button("9").grid(row=13, column=2, ipadx=10, ipady=15)
 btn0 = digit_button("0").grid(row=14, column=0, ipadx=10, ipady=15, columnspan=3, stick='we')
 btn13 = tk.Button(win, text="Enter", command=get_entry, fg='#6ea30a', font=('Arial', 25)) \
     .grid(row=13, column=3, ipadx=20, ipady=15, columnspan=2, stick='we')
-# '<Key>' - обработка любого события нажатия на клавишу
 
 btn14 = tk.Button(win, text="Снять", state='active', command=take_cash, font=('Arial', 22)) \
     .grid(row=8, column=0, ipadx=10, ipady=10, columnspan=3, stick='wens')
