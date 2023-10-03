@@ -19,6 +19,8 @@ logging.basicConfig(format=FORMAT, filename='logfile.log', filemode='a', encodin
 logger = logging.getLogger(__name__)
 
 logger.warning(msg='Запуск работы банкомата')
+
+
 def add_digit(digit):
     """ Adding digit in the end of entered string of entry"""
     value = ent.get()
@@ -53,34 +55,37 @@ def operation_with_money(full_amount_to_take_):
 
     if current_card_sum_op[1] >= full_amount_to_take_ and cash_mashine_state['operation'] == 'take money':
         ent.delete(0, tk.END)
-        ent.insert(0, f"Приступаем к операции. Полная сумма к снятию {full_amount_to_take-calculate_tax_size()}")
-
-        print(f'{full_amount_to_take_=}, {amount_to_take=}')
-        logger.info(msg=f'Карта номер: {current_card}. Сумма снятия со счета с учетом платы за обслуживание: {full_amount_to_take}, сумма к выдаче: {amount_to_take}')
-        current_card_sum_op[1] = SQL_DataBase.take_money_from_card(current_card_sum_op[0], full_amount_to_take_, calculate_tax_size())
+        ent.insert(0, f"Приступаем к операции. Полная сумма к снятию {full_amount_to_take - calculate_tax_size()}")
+        logger.info(msg=f'Сумма выдаваемая клиенту:{amount_to_take}, Сумма, снимаемая со счета:{full_amount_to_take_}')
+        current_card_sum_op[1] = SQL_DataBase.take_money_from_card(current_card_sum_op[0], full_amount_to_take_,
+                                                                   calculate_tax_size())
         return True
 
     elif current_card_sum_op[1] >= full_amount_to_take_ and cash_mashine_state['operation'] == 'push money':
         ent.delete(0, tk.END)
         ent.insert(0, f"Приступаем к операции. Сумма к зачислению {full_amount_to_take}")
-
-        print(f'{full_amount_to_take_=}, {amount_to_take=}')
-        current_card_sum_op[1] = SQL_DataBase.push_money_to_card(current_card_sum_op[0], amount_to_push, calculate_tax_size())
+        logger.info(msg=f'Сумма зачисляемая на счет:{amount_to_take}, Сумма, получаемая от клиента:{full_amount_to_take_}')
+        current_card_sum_op[1] = SQL_DataBase.push_money_to_card(current_card_sum_op[0], amount_to_push,
+                                                                 calculate_tax_size())
         return True
     else:
         return False
+
 
 def calculate_tax_size():
     """Функция вычисляет размер комиссии по данным о карте из списка current_card_sum_op, """
     """включая налог на богатсво и плату за 3ю операцию"""
     tax = 0
-    print(f'{current_card_sum_op = }')
+    logging.debug(
+        msg=f'Текущие данные по карте {current_card_sum_op = }')
     if (current_card_sum_op[2] + 1) % 3 == 0:
         tax += c.PERCENT_FOR_3RD_OPERATION * current_card_sum_op[1]
-        print(f'THIRD OPERATION is True, {tax =}')
+        logging.info(
+            msg=f'К сумме снятия/пополнения добавлена комиссия за 3-ю операцию {tax}')
     if current_card_sum_op[1] >= c.WEALTH_LIMIT:
         tax += c.WEALTH_PERCENT * current_card_sum_op[1]
-        print(f'WEALTH_LIMIT is True, tax ={c.WEALTH_PERCENT * current_card_sum_op[1]}')
+        logging.info(
+            msg=f'К сумме снятия/пополнения добавлен налог на богатсво {c.WEALTH_PERCENT * current_card_sum_op[1]}')
     return tax
 
 
@@ -94,6 +99,7 @@ def get_entry():
         if not current_string:
             current_string += ent.get().strip()
             current_card = current_string
+            logger.debug(msg=f"Введен номер карты: {current_card}")
             del_entry()
             ent.insert(0, "Введите пин-код")
             break
@@ -101,21 +107,17 @@ def get_entry():
             pin_num = ent.get()
             if "Введите пин-код" not in pin_num:
                 current_string += '+' + pin_num
-
-                print(current_string)
+                logger.debug(msg=f"Введен пин-код: {pin_num}")
                 cash_mashine_state['operation'] = 'seeking card'
                 logger.debug(msg="Текущий режим: seeking card")
                 del_entry()
-    print(cash_mashine_state['operation'])
     if cash_mashine_state['operation'] == 'seeking card':
         card, pin = tuple(map(int, current_string.split("+")))
         current_card_sum_op = SQL_DataBase.find_card_and_pin(card, pin)
         if not current_card_sum_op is None:
-            print('Наш клиент')
             logger.info(msg=f"Успешный вход с номером карты: {current_card}")
             ent.insert(0, "Выберите операцию: Снять, пополнить, выйти")
         else:
-            print('Шулер')
             logger.warning(msg=f"Неудачная попытка входа с данными номера карты + пин-кодом: {current_string}")
             ent.insert(0, 'Неверно введены номер карты и/или пин-код')
             cash_mashine_state['operation'] == 'ready'
@@ -124,12 +126,11 @@ def get_entry():
 
     elif cash_mashine_state['operation'] == 'take money':
         amount_to_take = int(ent.get())
-        print(amount_to_take)
         while amount_to_take % c.BASE != 0 or amount_to_push == 0:
             logger.info(msg=f'Запрошено снятие со счета суммы {amount_to_take}')
             del_entry()
             ent.insert(0, f"Сумма пополнения и снятия должна быть кратна {c.BASE}")
-            amount_to_take = int(ent.get().replace(f"Сумма пополнения и снятия должна быть кратна {c.BASE}", 0))
+            amount_to_take = int(ent.get().replace(f"Сумма пополнения и снятия должна быть кратна {c.BASE}", '0'))
         logger.info(msg=f'Принят запрос снятиия суммы {amount_to_take}')
         if c.MIN_DUTY_TO_TAKE < amount_to_take * c.DUTY_TO_TAKE_PERCENT < c.MAX_DUTY_TO_TAKE:
             full_amount_to_take = round(amount_to_take * (1 + c.DUTY_TO_TAKE_PERCENT), 2)
@@ -138,7 +139,7 @@ def get_entry():
         else:
             full_amount_to_take = round(amount_to_take + c.MAX_DUTY_TO_TAKE, 2)
         full_amount_to_take += calculate_tax_size()
-        print(f'{full_amount_to_take = }')
+        logger.info(msg=f'Сумма снятия с учетом стоимости обслуживания {full_amount_to_take}')
         request_take = operation_with_money(full_amount_to_take)
         if request_take:
             del_entry()
@@ -149,12 +150,11 @@ def get_entry():
 
     elif cash_mashine_state['operation'] == 'push money':
         amount_to_push = int(ent.get())
-        print(amount_to_push)
-        while amount_to_push % c.BASE != 0 or amount_to_push ==0:
+        while amount_to_push % c.BASE != 0 or amount_to_push == 0:
             logger.info(msg=f'Запрошено пополнение счета на сумму {amount_to_push}')
             del_entry()
             ent.insert(0, f"Сумма пополнения и снятия должна быть кратна {c.BASE}")
-            amount_to_push = int(ent.get().replace(f"Сумма пополнения и снятия должна быть кратна {c.BASE}", 0))
+            amount_to_push = int(ent.get().replace(f"Сумма пополнения и снятия должна быть кратна {c.BASE}", '0'))
         logger.info(msg=f'Принят запрос зачисления суммы {amount_to_push}')
         ent.delete(0, tk.END)
         ent.insert(0, "Приступаем к операции")
@@ -166,6 +166,7 @@ def get_entry():
         else:
             del_entry()
             ent.insert(0, f"Недостаточно средств на счете {current_card_sum_op[1]}")
+
 
 def clear_entry():
     ent.delete(len(ent.get()) - 1)
@@ -207,12 +208,13 @@ def push_cash():
 
 def exit():
     global current_card, current_string
-    logger.info(msg=f'Клиент с номером карты {current_card} вышел из системы.')
+    logger.info(
+        msg=f'Клиент с номером карты {current_card} вышел из системы.')
     current_card = None
     cash_mashine_state['operation'] = 'ready'
     current_string = ''
     current_card = None
-    
+
     del_entry()
     ent.insert(6, "Введите номер карты")
 
